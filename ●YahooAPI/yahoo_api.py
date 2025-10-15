@@ -1,10 +1,11 @@
 # ============================================================
-# 🌸 Yahoo!ショッピングAPI ロジック部分
+# 🌸 Yahoo!ショッピングAPI ロジック部分（保存先選択対応版）
 # ============================================================
 
-import requests             # ← Yahoo!APIにアクセスするための通信ライブラリ
-import pandas as pd         # ← データを表形式にしてExcelに保存するために使用
-import time                 # ← API呼び出しの間に少し休ませるために使用
+import requests
+import pandas as pd
+import time
+from tkinter import filedialog  # ✅ 追加：保存先を選択するために必要
 
 def run_yahoo_api(app_id, mode, seller_id, api_url, log_callback, low_price=None, high_price=None):
     """
@@ -14,120 +15,124 @@ def run_yahoo_api(app_id, mode, seller_id, api_url, log_callback, low_price=None
     """
 
     try:
-        result_log = "result.txt"  # ← 実行結果（ログ）を保存するファイル名を設定
+        result_log = "result.txt"  # 実行結果ログファイル
 
         # ============================================================
-        # 件数確認モード（全体のヒット件数だけ調べる）
+        # 件数確認モード
         # ============================================================
-        if mode == "count":  # ← 「件数確認モード」で呼ばれた場合
-            log_callback(f"[INFO] 商品数を調べています（販売者ID: {seller_id}）...")  # ← GUIログに出力
+        if mode == "count":
+            log_callback(f"[INFO] 商品数を調べています（販売者ID: {seller_id}）...")
 
-            params = {                     # ← Yahoo!APIに送る検索条件をセット
-                "appid": app_id,            # ← あなたのYahoo!アプリケーションID
-                "seller_id": seller_id,     # ← 出店者ID（例: hands-net）
-                "results": 1,               # ← 1件だけ取得（件数調査目的なので1件でOK）
-                "start": 1,                 # ← 開始位置（最初の1件）
-                "sort": "+price" ,           # ← 価格の昇順でソート
-                "condition": "new" ,
-                         }
+            params = {
+                "appid": app_id,
+                "seller_id": seller_id,
+                "results": 1,
+                "start": 1,
+                "sort": "+price",
+                "condition": "new"
+            }
+
             if low_price:
                 params["price_from"] = int(low_price)
             if high_price:
                 params["price_to"] = int(high_price)
-            
-            
 
             try:
-                response = requests.get(api_url, params=params, timeout=10)  # ← APIを呼び出す（10秒でタイムアウト）
-                data = response.json()                                       # ← 結果をJSON形式で読み取る
-                total_available = data.get("totalResultsAvailable", 0)       # ← 総ヒット件数を取得
+                response = requests.get(api_url, params=params, timeout=10)
+                data = response.json()
+                total_available = data.get("totalResultsAvailable", 0)
 
-                result_text = f"[RESULT] 条件に一致した全体のヒット件数: {total_available:,} 件"  # ← 表示用テキストを作る
-                log_callback(result_text)                                     # ← GUIログに出力
-                with open(result_log, "w", encoding="utf-8") as f:           # ← result.txtに保存
+                result_text = f"[RESULT] 条件に一致した全体のヒット件数: {total_available:,} 件"
+                log_callback(result_text)
+                with open(result_log, "w", encoding="utf-8") as f:
                     f.write(result_text)
 
             except Exception as e:
-                err = f"[ERROR] エラー発生: {e}"                            # ← エラー内容を文字列に変換
-                log_callback(err)                                            # ← GUIログに出力
-                with open(result_log, "w", encoding="utf-8") as f:           # ← result.txtにも保存
+                err = f"[ERROR] エラー発生: {e}"
+                log_callback(err)
+                with open(result_log, "w", encoding="utf-8") as f:
                     f.write(err)
-            return  # ← 件数モードはここで終了
+            return  # 件数モード終了
 
         # ============================================================
-        # 通常モード（商品情報をすべて取得）
+        # 通常モード（商品情報取得）
         # ============================================================
-        total_items = 1000              # ← 最大で取得したい商品件数（仮に1万件）
-        results_per_call = 50            # ← 1回のAPI呼び出しで取れる上限（Yahooの仕様）
-        calls = total_items // results_per_call  # ← 全部で何回呼び出すか（1万 ÷ 50 = 200回）
-        wait_sec = 0.8                   # ← 呼び出し間隔（秒）を設定（Yahoo制限対策）
+        total_items = 1000
+        results_per_call = 50
+        calls = total_items // results_per_call
+        wait_sec = 0.8
 
-        output_file = f"{seller_id}_商品情報_{low_price or 'min'}-{high_price or 'max'}.xlsx"
-                      # ← 出力ファイル名を定義
-        log_callback(f"[INFO] 商品取得を開始）")  # ← GUIに開始メッセージを表示
-        all_rows = []                    # ← 取得した商品データを入れるリスト
+        log_callback(f"[INFO] 商品取得を開始します...")
+        all_rows = []
 
-        # ============================================================
-        # 🔁 ページごとに繰り返し取得（200回分）
-        # ============================================================
-        for i in range(calls):  
-            start = 1 + results_per_call+i*50         
-            
-            params = {                                        # ← APIに送る条件を設定
+        for i in range(calls):
+            start = 1 + results_per_call * i
+            params = {
                 "appid": app_id,
                 "seller_id": seller_id,
-                "results": results_per_call,#一回で呼び出す数
-                "start": start,#取得するスタート位置
+                "results": results_per_call,
+                "start": start,
                 "sort": "+price",
-                "condition": "new" ,
-                "price_from": int(low_price), # 下限価格
-                "price_to":int(high_price)    # 上限価格
-                    }
+                "condition": "new"
+            }
+            if low_price:
+                params["price_from"] = int(low_price)
+            if high_price:
+                params["price_to"] = int(high_price)
 
             try:
-                response = requests.get(api_url, params=params, timeout=10)  # ← API呼び出し
-                data = response.json()                                       # ← 結果をJSON形式で受け取る
-                hits = data.get("hits", [])                                  # ← 商品リストを取り出す
-                total_available = data.get("totalResultsAvailable", 0)       # ← 全体件数を取得（参考）
+                response = requests.get(api_url, params=params, timeout=10)
+                data = response.json()
+                hits = data.get("hits", [])
+                total_available = data.get("totalResultsAvailable", 0)
 
-                if not hits:                                                 # ← 商品データがなければ終了
-                    log_callback("これ以上商品データなし。終了します。")
+                if not hits:
+                    log_callback("これ以上商品データがありません。終了します。")
                     break
 
-                # ============================================================
-                # 商品1件ずつ取り出してリストに追加
-                # ============================================================
                 for h in hits:
-                    name = h.get("name") or ""       # ← 商品名
-                    in_stock = h.get("inStock")      # ← 在庫あり(True/False)
-                    price = h.get("price") or ""     # ← 価格
-                    jan = h.get("janCode") or ""     # ← JANコード
-                    all_rows.append([name, in_stock, price, jan])  # ← 一行ずつ追加
+                    name = h.get("name") or ""
+                    in_stock = h.get("inStock")
+                    price = h.get("price") or ""
+                    jan = h.get("janCode") or ""
+                    all_rows.append([name, in_stock, price, jan])
 
-                log_callback(f"[OK] {i+1}/{calls} ページ完了")  # ← 進行表示
-                time.sleep(wait_sec)  # ← Yahooへの負荷軽減のため、0.8秒休む
+                log_callback(f"[OK] {i+1}/{calls} ページ完了")
+                time.sleep(wait_sec)
 
-            except Exception as e:  # ← 通信エラーが出たとき
-                log_callback(f"[ERROR] エラー発生: {e}")             # ← GUIにエラーログ出力
-                log_callback("[WAIT] 30秒待機して再試行します...")   # ← ユーザーに待機案内
-                time.sleep(30)                                       # ← 30秒待って再開
+            except Exception as e:
+                log_callback(f"[ERROR] エラー発生: {e}")
+                log_callback("[WAIT] 30秒待機して再試行します...")
+                time.sleep(30)
 
         # ============================================================
-        # 保存処理（Excelファイルに出力）
+        # 保存処理（保存先をユーザーが選択）
         # ============================================================
-        df = pd.DataFrame(all_rows, columns=["商品名", "在庫あり", "価格", "JANコード"])  # ← 取得データを表形式に変換
-        df.to_excel(output_file, index=False)  # ← Excelに書き出し
+        df = pd.DataFrame(all_rows, columns=["商品名", "在庫あり", "価格", "JANコード"])
 
-        summary_text = (  # ← 完了報告用のメッセージをまとめる
-            f"[DONE] 取得完了: {len(all_rows)}件\n"
-            # f"[NEXT] 次回の開始番号: {start_number + len(all_rows)}\n"
-            f"[FILE] 保存先: {output_file}\n"
-
+        # ✅ 保存先ダイアログ
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excelファイル", "*.xlsx")],
+            initialfile=f"{seller_id}_商品情報_{low_price or 'min'}-{high_price or 'max'}.xlsx",
+            title="保存先を選択してください"
         )
-        log_callback(summary_text)  # ← GUIに最終結果を表示
 
-        with open(result_log, "w", encoding="utf-8") as f:  # ← result.txt にも最終結果を保存
+        if save_path:
+            df.to_excel(save_path, index=False)
+            summary_text = (
+                f"[DONE] 取得完了: {len(all_rows)}件\n"
+                f"[FILE] 保存先: {save_path}\n"
+            )
+        else:
+            summary_text = (
+                f"[CANCELLED] 保存がキャンセルされました。\n"
+                f"[INFO] 取得件数: {len(all_rows)}件（未保存）\n"
+            )
+
+        log_callback(summary_text)
+        with open(result_log, "w", encoding="utf-8") as f:
             f.write(summary_text)
 
     except Exception as e:
-        log_callback(f"[ERROR] 処理全体で例外発生: {e}")  # ← 予期しないエラーが発生した場合
+        log_callback(f"[ERROR] 処理全体で例外発生: {e}")
