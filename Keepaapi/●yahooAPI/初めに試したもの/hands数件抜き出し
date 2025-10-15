@@ -1,0 +1,65 @@
+import requests
+import pandas as pd
+import time
+
+# 🌸 Yahoo!ショッピング 商品検索API（V3）
+API_URL = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
+APP_ID = "dj00aiZpPXlkOGd5bDlUcTlWRyZzPWNvbnN1bWVyc2VjcmV0Jng9MmE-"  # あなたのClient ID
+
+# 🌷 検索設定
+SELLER_ID = "hands-net"         # 東急ハンズYahoo!店のID
+RESULTS_PER_CALL = 1           # 1回で取得する件数（最大50）
+TOTAL_ITEMS = 1                # 合計で取得したい件数
+CALLS = TOTAL_ITEMS // RESULTS_PER_CALL
+
+all_rows = []
+
+print("🔍 Yahoo!ショッピングAPIから商品情報を取得中...")
+
+for i in range(CALLS):
+    start = i * RESULTS_PER_CALL + 1
+
+    # 🔧 リクエストパラメータ
+    params = {
+        "appid": APP_ID,
+        "seller_id": SELLER_ID,
+        "results": RESULTS_PER_CALL,
+        "start": start,
+        "sort": "-score",        # 人気順
+        "condition": "new"       # 新品
+    }
+
+    try:
+        # 📨 API呼び出し
+        response = requests.get(API_URL, params=params, timeout=10)
+        data = response.json()
+        hits = data.get("hits", [])
+        if not hits:
+            print(f"⚠️ {i+1}ページ目に商品なし。")
+            break
+
+        for h in hits:
+            name = h.get("name") or ""
+            in_stock = h.get("inStock")  # True / False
+            price = h.get("price") or ""
+            jan = h.get("janCode") or ""
+            all_rows.append([name, in_stock, price, jan])
+
+        print(f"✅ {i+1}ページ目完了（累計: {len(all_rows)}件）")
+
+        time.sleep(0.5)
+
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        time.sleep(5)
+
+# 📄 データフレームに変換しExcelへ出力
+df = pd.DataFrame(all_rows, columns=["商品名", "在庫あり", "価格", "JANコード"])
+output_path = "handsnet_商品情報.xlsx"
+df.to_excel(output_path, index=False)
+ # 検索条件に合致した商品総数（ここを使う）
+
+available = data.get("totalResultsAvailable")
+print(f"🔎 全体のヒット件数: {available:,} 件")
+print("🎉 完了！Excelファイルを作成しました。")
+print(f"📁 保存先: {output_path}")
