@@ -6,8 +6,8 @@ APP_ID = "dj00aiZpPXlkOGd5bDlUcTlWRyZzPWNvbnN1bWVyc2VjcmV0Jng9MmE-"
 
 store_ids = set()
 
-for i in range(100):  # 試しに10ページ分
-    start = i * 50 + 1  # ページ先頭位置
+for i in range(20):  # 試しに10ページ分
+    start = i * 50 + 50  # ページ先頭位置
     params = {
         "appid": APP_ID,
         "query": "全商品",  # キーワードは必須
