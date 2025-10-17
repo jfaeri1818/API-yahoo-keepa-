@@ -255,14 +255,14 @@ def run_keepa_then_align(api_key: str, jan_file_path: str, log_box: tk.Text, sta
 class App:
     def __init__(self):
         self.root = TkinterDnD.Tk()
-        self.root.title("Keepa自動実行 → JAN整列ツール")
+        self.root.title("Amazon価格取得ツール（Keepa API使用）")
         self.root.geometry("560x490")
         self.root.configure(bg="#f5f0e6")
         self.root.resizable(False, False)
 
         title = tk.Label(
             self.root,
-            text="Excelを1つドロップ → APIキー入力 → 自動で価格取得 → 自動でJAN整列",
+            text="JANのみ含んだファイルをドロップしてください。",
             bg="#f5f0e6", fg="#333", font=("Meiryo", 12, "bold")
         )
         title.pack(pady=(10, 6))
@@ -327,7 +327,7 @@ class App:
             return
         self.jan_file_path = files[0]
         self.file_label.config(text=self.jan_file_path)
-        self.log_box.insert(tk.END, "✅ ファイルを受け取りました。APIキーを入力してください。\n")
+        self.log_box.insert(tk.END, "✅ ファイルを受け取りました。\n")
         self.log_box.see(tk.END)
         self.api_entry.focus_set()
 
